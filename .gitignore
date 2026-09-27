@@ -1,0 +1,11 @@
+app/dist/
+app/*.keystore
+evidence/
+*.apk
+*.idsig
+*.jks
+*.p12
+*.pem
+.env
+.env.*
+__pycache__/

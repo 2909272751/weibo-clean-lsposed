@@ -1,0 +1,9 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="io.github.weiboclean" android:versionCode="4" android:versionName="0.3.0">
+ <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="34" />
+ <queries><package android:name="com.sina.weibo"/><package android:name="com.skyhand.sinahelper"/></queries>
+ <application android:label="微博清简" android:description="@string/description" android:icon="@drawable/ic_launcher" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:allowBackup="false">
+  <activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity>
+  <provider android:name="io.github.libxposed.service.XposedProvider" android:authorities="io.github.weiboclean.XposedService" android:exported="true"/>
+  <provider android:name=".SettingsProvider" android:authorities="io.github.weiboclean.settings" android:exported="true" android:grantUriPermissions="true"/>
+ </application>
+</manifest>
