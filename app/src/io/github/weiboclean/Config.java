@@ -11,17 +11,17 @@ final class Config {
  /**
   * 已实测通过的微博 versionCode <b>区间</b>。
   *
-  * <p>16.9.0(8154)、16.9.1(8166)、16.9.2(8178)、16.9.3(8190) 四个点逐个真机装包 →
-  * 冷启动 → 读模块落盘诊断，全部通过（push_notify 4/4 入口、self_test 8/8、12 项规则挂接）。
-  * 区间内每两个实测点之间没有再插点测试，按二分法的前提——端点与中间点都通过，
-  * 则其间版本同样适配——整段标记为可用。
+  * <p>16.5.2(7970)、16.8.0(8105)、16.9.0~16.9.3(8154~8190) 逐个真机装包 → 冷启动 →
+  * 读落盘诊断，全部 12 项规则挂接、35/35、push_notify 4/4、self_test 8/8。
+  * 区间内每两个相邻实测点之间没有再插点测试，按二分法的前提（端点与中间点都通过，
+  * 则其间版本同样适配）——整段标记为可用。
   *
   * <p>命中即在适配诊断里标记为「已验证版本」，不再暗示这个版本还没适配。
   * 规则本身照常挂接：<b>本模块没有打开时的扫描弹窗，没有可省的动作</b>，
   * 所以这条区间只影响显示。区间外照旧逐项按语义类名核对 + fail-open 跳过。
   * 实测到新版本后，把区间上界抬到新的 versionCode 即可。
   */
- static final long VERIFIED_MIN=8154L, VERIFIED_MAX=8190L;
+ static final long VERIFIED_MIN=7970L, VERIFIED_MAX=8190L;
 
  static boolean isVerified(long code){return code>=VERIFIED_MIN&&code<=VERIFIED_MAX;}
  static final Uri URI=Uri.parse("content://io.github.weiboclean.settings/state");
