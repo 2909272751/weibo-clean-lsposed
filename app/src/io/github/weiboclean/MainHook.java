@@ -96,6 +96,7 @@ public final class MainHook extends XposedModule {
    if(m.getReturnType()!=void.class||!Modifier.isStatic(m.getModifiers()))throw new NoSuchMethodException("广告刷新签名变化");
    attach(m,chain->{hit("preload",1);return null;});return "开屏 SDK 刷新入口已挂接";
   });
+  rule("push_notify",()->installPushNotify());
   boolean feedInstalled=false;String feedFailure="";
   if(on("feed")||on("keywords")||on("users"))try{
    Class<?> base=type("com.sina.weibo.models.MBlogListBaseObject"),status=type("com.sina.weibo.models.Status");
@@ -206,6 +207,62 @@ public final class MainHook extends XposedModule {
   m.setAccessible(true);hook(m).setId("weiboclean:"+id).intercept(h);installed.add(id);
  }
  interface Installer{String install()throws Throwable;}
+ /**
+  * 推送通知广告闸门：挂 NotificationManager。
+  * notify(...) 是微博进程内所有通知的唯一出口（厂商推送/自建长连接/轮询最终都走这里），
+  * 而且它是平台类、不参与 R8 混淆，微博改版改名的是它自己的类，这里不受影响。
+  * createNotificationChannel 只观测不拦截：渠道被拦掉会让后续 notify 抛异常，反而更糟。
+  * 返回 "已挂 N/4 个入口"：少挂的必须报出来，不能当成全部生效。
+  */
+ private String installPushNotify() throws Throwable{
+  int expect=4,got=0;
+  Class<?>[] plain={int.class,android.app.Notification.class};
+  Class<?>[] tagged={String.class,int.class,android.app.Notification.class};
+  for(Class<?>[] signature:new Class<?>[][]{plain,tagged}){
+   final boolean withTag=signature==tagged;
+   try{
+    Method target=android.app.NotificationManager.class.getDeclaredMethod("notify",signature);
+    attach(target,chain->{
+     // 判据全在 NotifyGate 里，任何异常它自己 fail-open 放行。
+     NotifyGate.Decision decision=NotifyGate.evaluate(
+      (android.app.Notification)chain.getArg(withTag?2:1),withTag?(String)chain.getArg(0):null);
+     if(decision.suppress){
+      // 不调 proceed() = 通知根本不下发；正常通知一条都不受影响。
+      hit("push_notify",1);
+      synchronized(this){details.put("push_notify",NotifyGate.stats());}
+      return null;
+     }
+     return chain.proceed(); // 放行路径零日志、零分配
+    });
+    got++;
+   }catch(NoSuchMethodException ignored){}
+  }
+  try{
+   Method one=android.app.NotificationManager.class.getDeclaredMethod(
+    "createNotificationChannel",android.app.NotificationChannel.class);
+   attach(one,chain->{Object r=chain.proceed();try{
+    NotifyGate.Decision d=NotifyGate.evaluateChannel((android.app.NotificationChannel)chain.getArg(0));
+    if(d.suppress)hit("push_notify",1);
+   }catch(Throwable ignored){}return r;});
+   got++;
+  }catch(NoSuchMethodException ignored){}
+  try{
+   Method many=android.app.NotificationManager.class.getDeclaredMethod("createNotificationChannels",List.class);
+   attach(many,chain->{Object r=chain.proceed();try{
+    Object arg=chain.getArg(0);
+    if(arg instanceof List)for(Object channel:(List<?>)arg){
+     NotifyGate.Decision d=NotifyGate.evaluateChannel((android.app.NotificationChannel)channel);
+     if(d.suppress)hit("push_notify",1);
+    }
+   }catch(Throwable ignored){}return r;});
+   got++;
+  }catch(NoSuchMethodException ignored){}
+  if(got<expect)throw new NoSuchMethodException("只挂上 "+got+"/"+expect+" 个通知入口，已挂上的判定仍有效");
+  // 没有真机广告通知时，用固定样本证明「判定函数本身」是对的，而不是只说「钩子装上了」。
+  String selfTest=NotifyGate.selfTest();
+  log(4,"WeiboClean",selfTest);
+  return "通知下发与渠道创建入口已挂接（"+got+"/"+expect+"）；"+selfTest;
+ }
  void rule(String key,Installer installer){
   if(on(key))try{set(key,"hooked",installer.install());}catch(Throwable e){set(key,"missing",e.getClass().getSimpleName()+": "+e.getMessage());}
   progress++;submit();

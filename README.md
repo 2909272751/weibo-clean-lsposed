@@ -8,7 +8,7 @@
 
 | 分类 | 本版实现 |
 | --- | --- |
-| 广告净化 | 开屏准备/展示、广告刷新、旧/新版信息流、明确广告卡片、广告轮播、会员促销、视频广告片段及浮层 |
+| 广告净化 | 开屏准备/展示、广告刷新、旧/新版信息流、明确广告卡片、广告轮播、会员促销、视频广告片段及浮层、**推送通知广告** |
 | 页面精简 | 首页红包活动悬浮窗；卡片页全部顶部横幅、悬浮卡片；视频/发现/消息底栏入口及空位；底栏未读数字 |
 | 内容过滤 | 关键词包含、用户名/UID 精确匹配；评论关键词/用户/地区规则；有限长度的文字匹配，不执行正则 |
 | 信息流细节 | 头像装饰、博文背景、关键词推广链接、关注推荐、趋势推荐、顶部推荐区 |
@@ -17,7 +17,28 @@
 | 设置管理 | 本地 JSON 导出/导入、恢复默认、153 项猪手菜单对照（含子项） |
 | 适配诊断 | 功能检查进度、版本、设置来源、耗时、入口数量、逐项状态与命中次数、复制日志 |
 
-本版共 34 个规则开关，其中 11 个明确广告项默认开启：开屏、预加载、信息流、页面广告卡片、红包悬浮窗、我的广告卡片、新版商业广告、会员促销、视频广告片段、视频广告浮层、发现页广告轮播。覆盖安装保留已有开关；本轮按用户要求在当前设备将广告项全部开启。非广告功能及其既有选择保持不变。
+本版共 35 个规则开关，其中 12 个明确广告项默认开启：开屏、预加载、信息流、页面广告卡片、红包悬浮窗、我的广告卡片、新版商业广告、会员促销、视频广告片段、视频广告浮层、发现页广告轮播、**推送通知广告**。覆盖安装保留已有开关；本轮按用户要求在当前设备将广告项全部开启。非广告功能及其既有选择保持不变。
+
+## 推送通知广告闸门（push_notify）
+
+挂在 `android.app.NotificationManager` 上，四个入口：`notify(int,Notification)`、`notify(String,int,Notification)`、`createNotificationChannel(NotificationChannel)`、`createNotificationChannels(List)`。
+
+**为什么挂这里**：`notify(...)` 是微博进程内所有通知的**唯一出口**——厂商推送通道、自建长连接、轮询拉回来的推广最终都要调它；而且它是**平台类、不参与 R8 混淆**，微博改版改名的是它自己的类，这里不受影响。
+
+**判定顺序**（先便宜后昂贵，命中即停）：渠道 id → 渠道名/描述 → 标题 / 正文 / 长文 / 副标题 / 附加文本 / 滚动文本 / tag 上的广告词。
+
+**实测依据**：微博 16.9.3 实际注册的渠道是 `weibo_news_push_channel`、`weibo_push_channel_sound`、`weibo_msg_push_channel`、`weibo_client_im_push` —— **全是通用推送渠道，没有广告专用渠道**。所以广告和正常私信/@我/评论会走同一条渠道，**判定必须以文案为主，渠道 id 只能当辅助信号**。这正是当前实现的取舍。
+
+**只拦广告**：词表刻意避开私信、@我、评论、关注、点赞、转发、涨粉、热门；任何异常一律 fail-open 放行。
+
+**性能**：`notify` 是低频事件；拦截体内只做 `String.indexOf` 和取已有对象，零反射、零分配、零逐条日志。
+
+**判据表可改**：`app/src/io/github/weiboclean/NotifyGate.java` 里的 `CHANNEL_TOKENS` / `CHANNEL_NAME_TOKENS` / `TEXT_TOKENS`，改完重启微博生效。
+
+**可观测**：适配诊断页这一项显示 `通知下发与渠道创建入口已挂接（4/4）；self_test 8/8 passed`。`self_test` 是安装时用固定样本跑判定函数的结论（广告文案应拦、私信/@我/评论应放）。
+
+**`createNotificationChannel` 只观测不拦截**：拦掉渠道会让后续 `notify` 抛异常，反而更糟。
+
 
 0.3.0 新增 5 个广告开关。新版信息流过滤已实际命中；发现页轮播及会员促销经过关闭/开启对照，保留普通话题、热搜、头像、功能网格和钱包任务区。普通视频播放、冷启动、页面切换通过。开屏的新展示入口、视频插播和视频浮层尚无实际广告样本命中，不能宣称所有广告都已拦截。完整证据与限制见 [验收记录.md](验收记录.md)。
 
@@ -47,7 +68,13 @@
 
 ## 构建
 
-运行 `app/build.ps1`，支持环境变量 `WBC_SDK`、`WBC_JDK`。默认查找同级工作区的 `.android_build_tools`。输出 `app/dist/weibo-clean-v0.3.0.apk`，使用保存在本地的测试签名，后续覆盖安装应保留密钥。
+运行 `app/build.ps1`，输出 `app/dist/weibo-clean-v0.3.0.apk`，使用保存在本地的测试签名，后续覆盖安装应保留密钥。
+
+工具链**自动探测**，除 `WBC_SDK`、`WBC_JDK` 外还会依次找 `ANDROID_SDK` → `ANDROID_HOME` → `ANDROID_SDK_ROOT` → 同级 `.android_build_tools\android-sdk` → `C:\Android\Sdk` → `%LOCALAPPDATA%\Android\Sdk`；JDK 依次 `WBC_JDK` → `JAVA_HOME` → 同级 `.android_build_tools\jdk17` → AdoptOpenJDK。platform 与 build-tools 取该 SDK 下实际可用的最高版本，JDK 目录取版本号排序后的最新一个。
+
+D8 单独解析：优先 `R8_JAR` 环境变量，其次 `<SDK>\d8\r8-*.jar`，最后才用 SDK 自带 `d8.jar`——旧 build-tools 自带的 R8 3.3.20 在 dexing 本项目时会抛 `Cannot invoke String.length() because <parameter1> is null`。本仓库在 Android SDK `platforms;android-34` + `build-tools;34.0.0` + R8 9.4.27 上构建通过。
+
+工作区路径含中文时，`Get-ChildItem -Filter '*.java'` 在 PowerShell 5.1 上会偶发返回 0 个文件（表现为静默跳过所有源码），所以脚本统一用 `Get-FilesByExtension` 按扩展名过滤。
 
 `tests/run.ps1` 在电脑执行文字规则测试并生成 Android 测试包；传入 `-Serial <设备序列号>` 后，会在手机运行卡片过滤、广告判定、默认开关、备份格式与配置一致性检查。没有连接设备时不会宣称 Android 检查通过。
 

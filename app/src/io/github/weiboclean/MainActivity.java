@@ -41,7 +41,7 @@ public final class MainActivity extends Activity {
   ScrollView scroll=new ScrollView(this);contentScroll=scroll;scroll.setFillViewport(true);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));body=new LinearLayout(this);body.setOrientation(1);scroll.addView(body);
   if(page==2){diagnostics();return;}
   LinearLayout intro=box();intro.addView(text(page==0?"让内容回到前面":"留下你常用的入口",22,ink));intro.addView(text(page==0?"在 LSPosed 启用本模块并勾选微博。首次使用后，到适配诊断查看实际命中。":"每项独立控制，默认保留全部入口。首页和「我」始终保留。",14,muted));
-  if(page==0){section("广告拦截");for(int i=0;i<4;i++)toggle(i);for(String key:new String[]{"flow_ads","carousel_ads","mine_ads","mine_vip_ads","video_preroll_ads","video_overlay_ads","redpacket"})toggle(key);
+  if(page==0){section("广告拦截");for(int i=0;i<4;i++)toggle(i);for(String key:new String[]{"flow_ads","carousel_ads","mine_ads","mine_vip_ads","video_preroll_ads","video_overlay_ads","redpacket","push_notify"})toggle(key);
    section("内容与用户过滤");toggle("keywords");ruleEditor("keyword_rules","关键词规则","每行一个关键词，也可用 | 分隔。按文字包含匹配，不执行正则，避免复杂表达式拖慢滑动。");
    toggle("users");ruleEditor("user_rules","用户规则","每行一个用户名或 UID，精确匹配。不会取关、拉黑或删除微博。");
    toggle("comment_filter");toggle("comment_location");ruleEditor("location_rules","评论地区规则","每行一个地区，匹配评论公开显示的来源地区；未显示地区的评论保留。");
