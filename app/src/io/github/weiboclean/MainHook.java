@@ -22,6 +22,8 @@ public final class MainHook extends XposedModule {
  private Method statusText,statusUid,statusName;
  List<String> keywordRules=Collections.emptyList(),userRules=Collections.emptyList(),locationRules=Collections.emptyList();
  private String version="unknown", settingsSource="", fingerprint="";
+ /** 宿主版本在 Config.VERIFIED_VERSIONS 里（真机逐版验过）。 */
+ private boolean verified;
  private final AtomicBoolean started=new AtomicBoolean(), reportPending=new AtomicBoolean();
  private final Map<String,String> states=new LinkedHashMap<>(), details=new LinkedHashMap<>();
  private final Map<String,Long> hits=new LinkedHashMap<>();
@@ -49,6 +51,8 @@ public final class MainHook extends XposedModule {
    android.content.pm.PackageInfo info=c.getPackageManager().getPackageInfo(Config.HOST,0);
    version=info.versionName+" ("+info.getLongVersionCode()+")";
    fingerprint=info.lastUpdateTime+":"+info.getLongVersionCode()+":1";
+   // 已实测通过的版本区间（微博侧没有打开时的扫描弹窗，这里只影响设置页显示）
+   verified=Config.isVerified(info.getLongVersionCode());
   }catch(Exception ignored){}
   try{options=c.getContentResolver().call(Config.URI,"settings",null,null);if(options==null)throw new IllegalStateException();
    settingsSource="模块设置";saveSettings(options);
@@ -278,7 +282,7 @@ public final class MainHook extends XposedModule {
   }catch(Throwable ignored){}
  },1,TimeUnit.SECONDS);}
  private synchronized String report()throws JSONException{
-  JSONObject j=new JSONObject();j.put("version",version);j.put("fingerprint",fingerprint);j.put("revision",options.getLong("revision",0));j.put("source",settingsSource);j.put("progress",progress);j.put("total",Config.KEYS.length);j.put("hooks",installed.size());j.put("installMs",elapsed);j.put("time",System.currentTimeMillis());
+  JSONObject j=new JSONObject();j.put("version",version);j.put("fingerprint",fingerprint);j.put("revision",options.getLong("revision",0));j.put("source",settingsSource);j.put("progress",progress);j.put("total",Config.KEYS.length);j.put("hooks",installed.size());j.put("installMs",elapsed);j.put("verified",verified);j.put("time",System.currentTimeMillis());
   JSONArray rows=new JSONArray();for(String k:Config.KEYS){JSONObject row=new JSONObject();row.put("key",k);row.put("state",states.get(k));String detail=details.containsKey(k)?details.get(k):"";if(on(k)&&(k.equals("feed")||k.equals("keywords")||k.equals("users")||k.startsWith("mine_"))&&!modernDetail.isEmpty())detail+="；"+modernDetail;row.put("detail",detail);row.put("hits",hits.get(k));rows.put(row);}j.put("rows",rows);return j.toString();
  }
  private void saveSettings(Bundle b){android.content.SharedPreferences.Editor e=context.getSharedPreferences("weiboclean_local",0).edit();for(String k:Config.KEYS)e.putBoolean(k,b.getBoolean(k));for(String k:Config.TEXT_KEYS)e.putString(k,b.getString(k,""));e.putLong("revision",b.getLong("revision"));e.apply();}
